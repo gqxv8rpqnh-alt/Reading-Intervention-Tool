@@ -247,7 +247,7 @@ function renderAssessments(c) {
 
 function renderReports(c) {
     c.innerHTML = `<h2 class="text-3xl font-bold mb-6">Reports</h2><div class="grid lg:grid-cols-3 gap-6"><div class="bg-white p-6 rounded-xl shadow border-t-4 border-indigo-500 h-fit space-y-4"><label class="block text-xs font-bold text-slate-500 uppercase">Student</label><select id="report-student-id" class="w-full border p-2 rounded"><option value="">Select...</option>${(store.students||[]).map(s=>`<option value="${s.id}">${s.lastName}, ${s.firstName}</option>`).join('')}</select><label class="block text-xs font-bold text-slate-500 uppercase">Start Date</label><input type="date" id="report-start" class="w-full border p-2 rounded"><label class="block text-xs font-bold text-slate-500 uppercase">End Date</label><input type="date" id="report-end" class="w-full border p-2 rounded"><button onclick="generateStudentReport()" class="w-full bg-indigo-600 text-white py-2 rounded font-bold mt-2">Generate</button></div><div class="lg:col-span-2 bg-white p-8 rounded-xl shadow border min-h-[400px]"><div id="report-output-area" class="hidden"><div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Summary</h3><button onclick="copyReport()" class="text-blue-600 font-bold text-sm">Copy</button></div><div id="report-text" class="bg-paper p-6 rounded border mb-6 text-lg leading-relaxed"></div><div class="h-64"><canvas id="report-chart"></canvas></div></div><div id="report-placeholder" class="text-center text-slate-300 mt-20 font-bold text-xl">Select parameters to view report.</div></div></div>`;
-    const now=new Date(); const start=new Date(); start.setDate(start.getDate()-30);
+    const now=new Date(); const start=new Date(); start.setDate(start.getDate()-90);
     setTimeout(()=>{ if(document.getElementById('report-end')) { document.getElementById('report-end').valueAsDate=now; document.getElementById('report-start').valueAsDate=start; } }, 100);
 }
 
@@ -265,12 +265,44 @@ function openStudentDetail(id) {
     const sess=(store.sessions||[]).filter(x=>x.studentId===id);
     const tot=sess.reduce((a,c)=>a+parseInt(c.durationMinutes||0),0);
     const content = document.getElementById('app-content');
-    content.innerHTML = `<div class="flex justify-between mb-6"><button onclick="nav('students')" class="font-bold text-slate-500">< Back</button><h2 class="text-3xl font-bold">${s.firstName} ${s.lastName}</h2><div></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"><div class="folder-card p-6 shadow border-t-4 border-blue-500"><p class="font-bold text-slate-500 text-xs uppercase">Profile</p><p>Gr ${s.grade} • ${s.primaryLanguage}</p><p class="font-bold">Level ${s.currentReadingLevel}</p></div><div class="folder-card p-6 shadow border-t-4 border-emerald-500"><p class="font-bold text-slate-500 text-xs uppercase">Dosage</p><p class="text-4xl font-bold text-emerald-700">${tot} <span class="text-sm text-emerald-600">min</span></p><p class="text-xs text-slate-400">${sess.length} sessions</p></div><div class="bg-yellow-50 p-6 rounded shadow border relative"><i data-lucide="sticky-note" class="absolute top-4 right-4 text-yellow-300"></i><p class="font-hand text-lg">${s.notes||'No notes.'}</p></div></div><div class="bg-white p-6 rounded-xl shadow border"><h4 class="font-bold mb-4">Progress</h4><div class="h-64"><canvas id="student-detail-chart"></canvas></div></div>`;
+    content.innerHTML = `<div class="flex justify-between mb-6"><button onclick="nav('students')" class="font-bold text-slate-500">< Back</button><h2 class="text-3xl font-bold">${s.firstName} ${s.lastName}</h2><div></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"><div class="folder-card p-6 shadow border-t-4 border-blue-500"><p class="font-bold text-slate-500 text-xs uppercase">Profile</p><p>Gr ${s.grade} • ${s.primaryLanguage}</p><p class="font-bold">Level ${s.currentReadingLevel}</p></div><div class="folder-card p-6 shadow border-t-4 border-emerald-500"><p class="font-bold text-slate-500 text-xs uppercase">Dosage</p><p class="text-4xl font-bold text-emerald-700">${tot} <span class="text-sm text-emerald-600">min</span></p><p class="text-xs text-slate-400">${sess.length} sessions</p></div><div class="bg-yellow-50 p-6 rounded shadow border relative"><i data-lucide="sticky-note" class="absolute top-4 right-4 text-yellow-300"></i><p class="font-hand text-lg">${s.notes||'No notes.'}</p></div></div><div class="bg-white p-6 rounded-xl shadow border"><h4 class="font-bold mb-4">Progress Monitoring</h4><div class="h-64"><canvas id="student-detail-chart"></canvas></div></div>`;
     lucide.createIcons();
     // Chart
     if(currentStudentChart) { currentStudentChart.destroy(); currentStudentChart=null; }
-    const aData=(store.assessments||[]).filter(a=>a.studentId===id && a.metrics.wcpm).sort((a,b)=>new Date(a.date)-new Date(b.date));
-    if(aData.length>0) currentStudentChart = new Chart(document.getElementById('student-detail-chart'), { type:'line', data:{labels:aData.map(d=>new Date(d.date).toLocaleDateString()), datasets:[{label:'WCPM', data:aData.map(d=>d.metrics.wcpm), borderColor:'#4f46e5'}]}, options:{maintainAspectRatio:false} });
+    const aData=(store.assessments||[]).filter(a=>a.studentId===id && a.assessmentType.includes('Fluency')).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    
+    // Only WCPM on Chart
+    if(aData.length>0) {
+        currentStudentChart = new Chart(document.getElementById('student-detail-chart'), { 
+            type:'line', 
+            data:{
+                labels: aData.map(d=>new Date(d.date).toLocaleDateString()), 
+                datasets:[{
+                    label:'Fluency (WCPM)', 
+                    data: aData.map(d=>d.metrics.wcpm), 
+                    borderColor:'#3b82f6', 
+                    tension:0.3,
+                    backgroundColor: '#e0e7ff',
+                    fill: true
+                }]
+            }, 
+            options:{
+                maintainAspectRatio:false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                // Add context about accuracy from the raw data object
+                                const raw = aData[context.dataIndex];
+                                return `Accuracy: ${raw.metrics.accuracy || '?'}%`;
+                            }
+                        }
+                    }
+                }
+            } 
+        });
+    }
 }
 
 function openSessionModal(sId, gId, sessId) {
@@ -279,7 +311,6 @@ function openSessionModal(sId, gId, sessId) {
     
     // Skill Options
     let skillOpts = "";
-    // If the existing skill isn't in our new taxonomy (Legacy Data), add it manually
     let skillFound = false;
     for(const [cat, skills] of Object.entries(skillTaxonomy)) {
         skillOpts += `<optgroup label="${cat}">`;
@@ -320,14 +351,75 @@ function generateStudentReport() {
     const start=new Date(document.getElementById('report-start').value); const end=new Date(document.getElementById('report-end').value);
     const logs=(store.sessions||[]).filter(x=>(x.studentId===sId||(store.groups||[]).find(g=>g.id===x.groupId && g.studentIds.includes(sId))) && new Date(x.date)>=start && new Date(x.date)<=end);
     
-    let txt=`<strong>${s.firstName} ${s.lastName}</strong><br>Sessions: ${logs.length}<br>Skills: ${[...new Set(logs.map(l=>l.focusSkill))].join(', ')}<br><br>Notes:<br>${logs.map(l=>`- ${l.notes}`).join('<br>')}`;
+    // Sort assessments by date
+    const relAssessments = (store.assessments || []).filter(a => a.studentId === sId && new Date(a.date) >= start && new Date(a.date) <= end).sort((a,b) => new Date(a.date) - new Date(b.date));
+    const fluencyAssessments = relAssessments.filter(a => a.assessmentType.includes("Fluency"));
+
+    // Calculate metrics
+    const totalMin = logs.reduce((acc, curr) => acc + parseInt(curr.durationMinutes||0), 0);
+    const skillCount = {}; logs.forEach(l => { const sk = l.focusSkill.split(':')[0]; skillCount[sk] = (skillCount[sk]||0)+1; });
+    const topSkills = Object.entries(skillCount).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(" and ");
+
+    let txt=`<strong>${s.firstName} ${s.lastName} Progress Report</strong><br>
+    <span class="text-sm text-slate-500">${start.toLocaleDateString()} - ${end.toLocaleDateString()}</span><br><br>
+    <strong>Instruction:</strong> ${s.firstName} received <strong>${totalMin} minutes</strong> of intervention across <strong>${logs.length} sessions</strong>. 
+    Focus areas included <strong>${topSkills || 'various skills'}</strong>.<br><br>
+    <strong>Observations:</strong><br>
+    ${logs.slice(0,5).map(l=>`• ${new Date(l.date).toLocaleDateString()}: ${l.notes}`).join('<br>')}`;
+    
+    if(relAssessments.length > 0) {
+        txt += `<br><br><strong>Assessment Data:</strong><br>`;
+        if (fluencyAssessments.length > 0) {
+            const first = fluencyAssessments[0].metrics.wcpm;
+            const last = fluencyAssessments[fluencyAssessments.length-1].metrics.wcpm;
+            txt += `• <strong>Fluency Growth:</strong> ${s.firstName} moved from <strong>${first} WCPM</strong> to <strong>${last} WCPM</strong>.<br>`;
+        }
+        // Mention other assessments loosely
+        const otherCount = relAssessments.length - fluencyAssessments.length;
+        if(otherCount > 0) {
+            txt += `• Additional assessments indicate performance in accuracy and raw scores (see chart tooltips for details).`;
+        }
+    } else {
+        txt += `<br><br><em>No assessments recorded in this period.</em>`;
+    }
+
     document.getElementById('report-output-area').classList.remove('hidden'); document.getElementById('report-placeholder').classList.add('hidden');
     document.getElementById('report-text').innerHTML=txt;
     
-    // Chart
+    // Chart (WCPM ONLY)
     if(currentReportChart) { currentReportChart.destroy(); currentReportChart=null; }
-    const aData=(store.assessments||[]).filter(a=>a.studentId===sId && a.metrics.wcpm).sort((a,b)=>new Date(a.date)-new Date(b.date));
-    if(aData.length>0) currentReportChart = new Chart(document.getElementById('report-chart'), { type:'line', data:{labels:aData.map(d=>new Date(d.date).toLocaleDateString()), datasets:[{label:'WCPM', data:aData.map(d=>d.metrics.wcpm), borderColor:'#4f46e5'}]}, options:{maintainAspectRatio:false} });
+    
+    // Only chart fluency to keep it clean
+    if(fluencyAssessments.length>0) {
+        currentReportChart = new Chart(document.getElementById('report-chart'), { 
+            type:'line', 
+            data:{
+                labels: fluencyAssessments.map(d=>new Date(d.date).toLocaleDateString()), 
+                datasets:[{
+                    label:'Fluency (WCPM)', 
+                    data: fluencyAssessments.map(d=>d.metrics.wcpm), 
+                    borderColor:'#3b82f6', 
+                    tension:0.3,
+                    backgroundColor: '#e0e7ff',
+                    fill: true
+                }]
+            }, 
+            options:{
+                maintainAspectRatio:false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const raw = fluencyAssessments[context.dataIndex];
+                                return `Accuracy: ${raw.metrics.accuracy || '?'}%`;
+                            }
+                        }
+                    }
+                }
+            } 
+        });
+    }
 }
 function copyReport() { navigator.clipboard.writeText(document.getElementById('report-text').innerText); showToast("Copied"); }
 
@@ -336,10 +428,12 @@ function parseJSONInput(raw) {
     let str=raw.replace(/```json/g,'').replace(/```/g,'');
     const s=str.indexOf('{'), e=str.lastIndexOf('}');
     if(s!==-1 && e!==-1) str=str.substring(s,e+1);
+    // Sanitize quotes and spacing
+    str = str.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\u00A0/g, ' ').replace(/\t/g, ' ');
     return { ...defaultState, ...JSON.parse(str) };
 }
 function openJSONPasteModal() { openModal(`<h3 class="text-xl font-bold mb-4">Paste JSON</h3><textarea id="json-paste-area" class="w-full h-64 border p-2 font-mono text-xs"></textarea><button onclick="processJSONPaste()" class="w-full bg-slate-800 text-white py-2 mt-4 font-bold rounded">Import</button>`); }
-function processJSONPaste() { try { store=parseJSONInput(document.getElementById('json-paste-area').value); saveStore(); closeModal(); showToast("Imported"); nav('dashboard'); } catch(e){ alert("Invalid JSON"); } }
+function processJSONPaste() { try { store=parseJSONInput(document.getElementById('json-paste-area').value); saveStore(); closeModal(); showToast("Imported"); nav('dashboard'); } catch(e){ alert("Invalid JSON: " + e.message); } }
 function wipeData() { store={students:[],groups:[],sessions:[],assessments:[],settings:{language:'en'}}; saveStore(); nav('dashboard'); showToast("Reset"); }
 function openCSVImport(t) { openModal(`<h3 class="text-xl font-bold mb-4">Import CSV</h3><textarea id="csv-area" class="w-full h-64 border p-2"></textarea><button onclick="processCSV()" class="w-full bg-blue-600 text-white py-2 mt-4 rounded font-bold">Import</button>`); }
 function processCSV() {
